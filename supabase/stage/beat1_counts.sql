@@ -19,3 +19,11 @@ begin
   perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
   return n;
 end $$;
+
+-- pg_temp.beat1_rls_off_count(): the same question once beat 1's "RLS off" step has turned RLS off on invoices and
+-- customers (list_overdue_invoices joins both): every tenant's open or partial invoices 366+ days past due. Counted
+-- as the table owner, which RLS doesn't apply to. The agent sees at most 200 of them (the tool's cap).
+create function pg_temp.beat1_rls_off_count() returns bigint language sql as $$
+  select count(*) from public.invoices i join public.customers c on c.id = i.customer_id
+  where i.status in ('open', 'partial') and i.due_at <= current_date - 366;
+$$;
