@@ -22,6 +22,25 @@ select pg_temp.act_as('a11ce000-0000-0000-0000-000000000001');
 select is(jsonb_array_length(public.list_overdue_invoices(366) -> 'data')::bigint, 2::bigint, 'same as list_overdue_invoices(366) for Alice');
 reset role;
 
+-- Beat 1's "RLS off" step: with RLS off on invoices and customers (the tool joins both), Bob's same question returns
+-- every tenant's year-overdue invoices. The reset prints that number too, so the script can say what to expect.
+-- Counted once, as the owner (as the reset runs it): acting as Bob, the count itself would be under RLS.
+select pg_temp.beat1_rls_off_count() as rls_off \gset
+select ok(:rls_off >= pg_temp.beat1_count('alice@brightwater.test') + 1,
+  'RLS off: more than Alice sees, because it includes the other tenant''s');
+alter table public.invoices disable row level security;
+alter table public.customers disable row level security;
+select pg_temp.act_as('b0b00000-0000-0000-0000-000000000002');
+select is(jsonb_array_length(public.list_overdue_invoices(366) -> 'data')::bigint, :rls_off::bigint,
+  'RLS off: the same as list_overdue_invoices(366) returns for Bob');
+reset role;
+alter table public.invoices enable row level security;
+alter table public.customers enable row level security;
+select pg_temp.act_as('b0b00000-0000-0000-0000-000000000002');
+select ok(jsonb_array_length(public.list_overdue_invoices(366) -> 'data')::bigint < :rls_off,
+  'RLS back on: Bob sees fewer again');
+reset role;
+
 select is(current_user::text, 'postgres', 'leaves the role as it was');
 select is(pg_temp.beat1_count('nobody@brightwater.test'), null::bigint, 'an unknown email gives no count');
 

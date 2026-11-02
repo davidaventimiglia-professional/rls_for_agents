@@ -15,7 +15,10 @@ start=$(date +%s.%N 2>/dev/null || python3 -c 'import time;print(time.time())')
 PGPASSWORD="$STAGE_DB_PASSWORD" psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 --single-transaction -f supabase/stage/reset_stage.sql
 end=$(python3 -c 'import time;print(time.time())')
 printf 'reset-stage: done in %.1f s\n' "$(python3 -c "print($end - $start)")"
-# Beat 1's counts move every day; the demo script reads them from here.
+# Beat 1's counts move every day; the demo script reads them from here, including what Bob's same question returns
+# after the "RLS off" step (RLS off on invoices and customers). The agent sees at most 200 rows.
 PGPASSWORD="$STAGE_DB_PASSWORD" psql "$DB_URL" -X -q -At -v ON_ERROR_STOP=1 -f supabase/stage/beat1_counts.sql \
-  -c "select format('beat 1 today (more than a year overdue): Alice %s, Bob %s',
-        pg_temp.beat1_count('alice@brightwater.example'), pg_temp.beat1_count('bob@brightwater.example'))"
+  -c "select format('beat 1 today (more than a year overdue): Alice %s, Bob %s', pg_temp.beat1_count('alice@brightwater.example'),
+        pg_temp.beat1_count('bob@brightwater.example'))" \
+  -c "select format('beat 1, Bob after RLS off on invoices and customers: %s%s', n, case when n > 200 then ' (the agent sees 200)' else '' end)
+        from (select pg_temp.beat1_rls_off_count() as n) c"

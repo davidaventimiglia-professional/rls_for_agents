@@ -32,6 +32,19 @@ themselves, so there's nothing to export first, and they refuse unless the repo'
 
 - **Beat 1 (same question, different answers).** Alice and Bob each ask "How many invoices are more than a year
   overdue?" The answers are the counts the reset printed, not fixed numbers.
+- **Beat 1, "RLS off".** Turn RLS off on both tables the overdue tool reads (it joins invoices to customers, so
+  turning off only invoices changes nothing for Bob), and Bob asks the same question again:
+  ```sql
+  alter table public.invoices disable row level security; alter table public.customers disable row level security;
+  ```
+  His answer becomes the reset's "Bob after RLS off" number, including other companies' invoices (`KST-`, `TPL-`).
+  Then put it back:
+  ```sql
+  alter table public.invoices enable row level security; alter table public.customers enable row level security;
+  ```
+  Turning off RLS on payments instead doesn't work on stage: the payment search has no customer filter and returns
+  the newest 200, so the agent reports "no payments found" even though other tenants' payments leaked. If a
+  run-through leaves RLS off, `scripts/rebuild-stage.sh --yes` restores it.
 - **Beat 4 (live policy).** The operator runs `supabase/stage/live_policy_500.sql` against stage (psql via
   the session pooler, as `scripts/reset-stage.sh` does). The reset removes it.
 - **Beat 5 (revoke).** Alice clicks **Revoke agent access** on the Agent access page. It reports both halves:
