@@ -1,13 +1,13 @@
 # Stage runbook
 
 How to run the five stage beats (`docs/context-packs/00_SHARED_CONTEXT.md` section 11) on the stage project.
-Secrets and the project ref live in `~/.ar-copilot/stage.env`, never in this repo.
+Secrets and the project ref live in `~/.ar-copilot/stage.env`, never in this repo. The stage scripts read that file
+themselves, so there's nothing to export first, and they refuse unless the repo's linked project is its `STAGE_REF`.
 
 ## Before every rehearsal
 
 1. **Reset stage** (under 60 s, idempotent):
    ```sh
-   set -a; source ~/.ar-copilot/stage.env; set +a
    scripts/reset-stage.sh
    ```
    This drops the live $500 policy, turns the kill switch off (`docs/ARENA_RUNBOOK.md`), removes proposals and dunning emails, restores invoice statuses and
@@ -47,7 +47,6 @@ Run the reset again (step 1). Leave reconnecting to the next rehearsal's checkli
 The reset only resets data. If a run-through changed the database itself (RLS turned off, a policy dropped,
 changed or added, a function removed), rebuild stage from the repo instead:
 ```sh
-set -a; source ~/.ar-copilot/stage.env; set +a
 scripts/rebuild-stage.sh --yes
 ```
 It removes the `app` and `ctf` schemas and everything the migrations put in `public`, runs every migration and the

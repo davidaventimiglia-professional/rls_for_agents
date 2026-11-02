@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # S9: restore stage to its pre-demo state (under 60 s, idempotent). Run before every rehearsal.
-# Needs STAGE_DB_PASSWORD (e.g. from ~/.ar-copilot/stage.env) and a linked stage project.
+# Reads STAGE_REF and STAGE_DB_PASSWORD from ~/.ar-copilot/stage.env itself (scripts/lib/stage-env.sh) and refuses
+# unless the linked project is that STAGE_REF. A caller that passes DB_URL (scripts/rebuild-stage.sh) has checked it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-: "${STAGE_DB_PASSWORD:?set STAGE_DB_PASSWORD}"
-DB_URL="${DB_URL:-$(cat supabase/.temp/pooler-url)}"
+. scripts/lib/stage-env.sh
+stage_env_load
+if [ -z "${DB_URL:-}" ]; then
+  stage_require_linked || exit 1
+  DB_URL="$(cat supabase/.temp/pooler-url)"
+fi
+: "${STAGE_DB_PASSWORD:?set STAGE_DB_PASSWORD in ${AR_ENV_DIR:-~/.ar-copilot}/stage.env}"
 start=$(date +%s.%N 2>/dev/null || python3 -c 'import time;print(time.time())')
 PGPASSWORD="$STAGE_DB_PASSWORD" psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 --single-transaction -f supabase/stage/reset_stage.sql
 end=$(python3 -c 'import time;print(time.time())')
