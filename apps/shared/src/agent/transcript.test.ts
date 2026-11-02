@@ -27,6 +27,20 @@ describe("reduce", () => {
     expect(tool.reason).toBe("agent_not_permitted");
     expect(tool.pending).toBe(false);
   });
+  it("consecutive text events are one reply: the runtime streams a reply in pieces, even mid-word (#38)", () => {
+    let t: Transcript = [];
+    t = reduce(t, { type: "user", text: "summarize the memos" });
+    for (const piece of ["the headings a", "ren't.\n\nBecause the mem", "os don't name invoices."]) t = reduce(t, { type: "text", text: piece });
+    t = reduce(t, { type: "tool_call", id: "1", name: "search_payments", args: {} });
+    t = reduce(t, { type: "text", text: "Found " });
+    t = reduce(t, { type: "text", text: "31." });
+    t = reduce(t, { type: "user", text: "thanks" });
+    t = reduce(t, { type: "text", text: "Any time." });
+    expect(t.map((x) => x.kind)).toEqual(["user", "assistant", "tool", "assistant", "user", "assistant"]);
+    expect((t[1] as { text: string }).text).toBe("the headings aren't.\n\nBecause the memos don't name invoices.");
+    expect((t[3] as { text: string }).text).toBe("Found 31.");
+    expect((t[5] as { text: string }).text).toBe("Any time.");
+  });
   it("a read that returns a list records how many rows came back (beat 1: same question, different answers)", () => {
     let t = reduce([], { type: "tool_call", id: "1", name: "list_overdue_invoices", args: {} });
     t = reduce(t, { type: "tool_result", id: "1", name: "list_overdue_invoices", envelope: { ok: true, data: [{}, {}, {}] } });

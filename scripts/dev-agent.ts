@@ -127,7 +127,12 @@ async function invocations(req: Request): Promise<Response> {
       const sim = simulated(message);
       if (sim) { await emit({ type: "error", code: sim, message: sim === "internal" ? "Token is expired (simulated runtime failure)" : `simulated ${sim}` }); return; }
       const calls = parseScript(message);
-      if (!calls.length) { await emit({ type: "text", text: "Scripted dev agent. Send lines like: /call get_invoice {\"invoice_number\":\"BWS-2026-0001\"}" }); return; }
+      if (!calls.length) {
+        // Streamed in small pieces, split mid-word, the way the AgentCore runtime streams a reply (#38).
+        const help = "Scripted dev agent. Send lines like: /call get_invoice {\"invoice_number\":\"BWS-2026-0001\"}";
+        for (let i = 0; i < help.length; i += 7) await emit({ type: "text", text: help.slice(i, i + 7) });
+        return;
+      }
       for (const [i, c] of calls.entries()) {
         const id = `${session}:${Date.now()}:${i}`;
         await emit({ type: "tool_call", id, name: c.name, args: c.args });
