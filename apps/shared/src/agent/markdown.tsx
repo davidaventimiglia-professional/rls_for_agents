@@ -130,9 +130,10 @@ function renderBlock(b: Block, key: string): ReactNode {
     case "hr": return <hr key={key} />;
     case "table": {
       const style = (c: number) => (b.align[c] ? { textAlign: b.align[c]! } : undefined);
-      // Short data cells (invoice numbers, dates, amounts) never wrap, so BWS-2026-2731 isn't split at its hyphens;
-      // longer text (customer names) and headers wrap at spaces, so the table fits the panel.
-      const nw = (t: string) => (t.length <= 16 || !/\s/.test(t) ? "nw" : undefined);
+      // Short data cells (invoice numbers, dates, amounts) never wrap, so BWS-2026-2731 isn't split at its hyphens.
+      // Anything longer wraps, customer names at spaces and long IDs (payment UUIDs) at their hyphens, and headers
+      // always can, so the table fits the panel.
+      const nw = (t: string) => (t.length <= 16 ? "nw" : undefined);
       return (
         <table key={key}>
           <thead><tr>{b.head.map((h, c) => <th key={c} style={style(c)}>{inline(h, `${key}.h${c}`)}</th>)}</tr></thead>

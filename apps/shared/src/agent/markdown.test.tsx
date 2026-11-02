@@ -78,6 +78,11 @@ describe("Markdown (the safe subset the copilot renders, #39)", () => {
       '<tr><td class="nw" style="text-align:left">A | B</td><td class="nw" style="text-align:right">5</td></tr>' +
       '<tr><td class="nw" style="text-align:left">C</td><td class="nw" style="text-align:right"></td></tr></tbody></table>'));
 
+  it("a long single word (a payment ID) wraps like long text, so a table of payments fits the panel", () =>
+    expect(html("| Payment ID | Amount |\n|---|---|\n| b96fb2c7-23bd-375a-9953-dcf5c949ab42 | 2096.08 EUR |")).toBe(
+      "<table><thead><tr><th>Payment ID</th><th>Amount</th></tr></thead><tbody>" +
+      '<tr><td>b96fb2c7-23bd-375a-9953-dcf5c949ab42</td><td class="nw">2096.08 EUR</td></tr></tbody></table>'));
+
   it("a separator with a different number of columns isn't a table (a sentence with a pipe, then a rule)", () =>
     expect(html("Paid | unpaid split is 3 to 1\n---")).toBe("<p>Paid | unpaid split is 3 to 1</p><hr/>"));
 
