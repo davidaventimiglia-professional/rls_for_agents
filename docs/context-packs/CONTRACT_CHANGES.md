@@ -169,8 +169,13 @@ for pack 03 to amend (issue #4). Nothing in sections 4 or 5 changes.
 - **Never breaks a turn.** The record runs alongside the runtime call and is awaited (up to 2 s) before the reply
   streams back. If it fails or is slow, the turn goes on unchanged and the proxy logs the HTTP status only (never
   the prompt or the key).
+- **How much is stored (2026-11-02, #4).** `ctf.record_prompt` keeps the first 16,000 characters of each prompt
+  (pgTAP 17). The record happens before the runtime's own limits apply, so without a cap a scripted player could
+  grow `ctf.prompts` without limit. The cap doesn't follow the runtime's message length: the scoreboard and the
+  classifier judge what the player sent, no real prompt comes near 16,000 characters, and the classifier reads
+  only the first 4,000.
 - **Still pack 03's:** `record_runtime_tool_calls` (I4's per-session counts from the runtime's logs, by a trusted
-  forwarder), and any limit on message length (the proxy stores the text as sent).
+  forwarder).
 
 ## CC-10 (from pack 04, 2026-10-27): kill-switch status before a turn, and limit details (proposal for pack 03)
 
