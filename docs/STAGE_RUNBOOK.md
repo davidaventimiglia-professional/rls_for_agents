@@ -42,6 +42,27 @@ Secrets and the project ref live in `~/.ar-copilot/stage.env`, never in this rep
 
 Run the reset again (step 1). Leave reconnecting to the next rehearsal's checklist.
 
+## After tampering with the schema: rebuild
+
+The reset only resets data. If a run-through changed the database itself (RLS turned off, a policy dropped,
+changed or added, a function removed), rebuild stage from the repo instead:
+```sh
+set -a; source ~/.ar-copilot/stage.env; set +a
+scripts/rebuild-stage.sh --yes
+```
+It removes the `app` and `ctf` schemas and everything the migrations put in `public`, runs every migration and the
+seed again (with stage's seed password and canary salt), then runs the reset and prints beat 1's counts. Last, it
+checks the schema against the migrations (`supabase db diff`, needs Docker, about a minute; skip with
+`--no-verify`) and fails if anything differs.
+- **One transaction.** If any step fails, stage is left exactly as it was.
+- **Kept:** Auth (users and their passwords, the agent's OAuth client, consents) and the active agent grants, so
+  Alice and Bob stay connected. Roles (`grafana_reader`), function secrets and Auth settings aren't touched.
+- **Starts over:** the seed's dates move to the day of the rebuild, so beat 1's counts go back to the seed's
+  baseline (Alice 21, Bob 4) and grow from there. Stage's recorded prompts, scores and arena players are removed
+  (players are provisioned again when they next play).
+
+Tested against the local stack by `scripts/test-rebuild-stage.sh`, including a broken migration part-way through.
+
 ## Rehearsing locally
 
 `scripts/e2e-apps.sh copilot` runs all five beats in stage mode against the local stack with the scripted dev
