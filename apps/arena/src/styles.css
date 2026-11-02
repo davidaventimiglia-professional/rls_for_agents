@@ -220,6 +220,15 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .msg-user { align-self: flex-end; background: var(--ink); color: var(--sheet); }
 .msg-assistant { align-self: flex-start; background: rgb(255 255 255 / 0.55); border: var(--rule); }
 .msg-thinking { font-style: italic; }
+/* Replies are rendered markdown (#39): real paragraphs and lists, so no pre-wrap. */
+.msg.md { white-space: normal; }
+.md :where(p, ul, ol, pre) { margin: 0; }  /* :where keeps this below the spacing rule next */
+.md > * + *, .md li > ul, .md li > ol { margin-top: 0.45em; }
+.md ul, .md ol { padding-left: 1.3em; }
+.md li + li { margin-top: 0.15em; }
+.md code { font-family: ui-monospace, Menlo, monospace; font-size: 0.88em; }
+.md pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 0.45rem 0.6rem; border: var(--rule); border-style: dashed; }
+.md hr { border: 0; border-top: var(--rule); }
 .copilot .notice { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; padding: 0.6rem 0.75rem; border: var(--rule); border-style: dashed; }
 .copilot .notice-error { border-color: var(--stamp); color: var(--stamp); border-style: solid; }
 .copilot .notice .primary { padding: 0 1.2rem; min-height: 2.8rem; }
