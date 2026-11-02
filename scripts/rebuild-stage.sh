@@ -7,12 +7,15 @@
 # client, consents), and the active agent grants are kept, so Alice and Bob stay connected. The seed's dates move
 # to today, so beat 1's counts start over. The verify step (supabase db diff, needs Docker, about a minute) fails
 # if the schema differs from the migrations at all.
-# Needs STAGE_DB_PASSWORD, STAGE_REF, STAGE_SEED_PASSWORD and STAGE_CANARY_SALT (~/.ar-copilot/stage.env). DB_URL may
-# point at the local stack instead (scripts/test-rebuild-stage.sh); then the seed uses its local defaults.
+# Reads STAGE_REF, STAGE_DB_PASSWORD, STAGE_SEED_PASSWORD and STAGE_CANARY_SALT from ~/.ar-copilot/stage.env itself
+# (scripts/lib/stage-env.sh), and refuses unless the linked project is that STAGE_REF. DB_URL may point at the
+# local stack instead (scripts/test-rebuild-stage.sh); then the seed uses its local defaults.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SUPABASE="${SUPABASE:-npx --yes supabase@2.122.0}"
 MIGRATIONS_DIR="${REBUILD_MIGRATIONS_DIR:-supabase/migrations}"  # tests point this at a copy with a broken migration
+. scripts/lib/stage-env.sh
+stage_env_load
 
 yes=false verify=true
 for a in "$@"; do
@@ -25,7 +28,7 @@ case "$DB_URL" in
   *@127.0.0.1:* | *@localhost:*) target=local ;;
   *)
     target=stage
-    : "${STAGE_REF:?set STAGE_REF (~/.ar-copilot/stage.env)}"
+    : "${STAGE_REF:?set STAGE_REF in ${AR_ENV_DIR:-~/.ar-copilot}/stage.env}"
     case "$DB_URL" in *"postgres.$STAGE_REF@"* | *"db.$STAGE_REF."*) ;;
       *) echo "refusing: DB_URL is not the stage project" >&2; exit 1 ;; esac
     : "${STAGE_DB_PASSWORD:?set STAGE_DB_PASSWORD}"
@@ -39,6 +42,8 @@ if ! $yes; then
   echo "Auth (users, OAuth clients, consents) and active agent grants are kept. Run again with --yes to do it."
   exit 1
 fi
+# The verify step diffs the linked project, so the link must be stage too.
+if [ "$target" = stage ]; then stage_require_linked || exit 1; fi
 
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 # Secrets go to psql in a file only this user can read, never on a command line.

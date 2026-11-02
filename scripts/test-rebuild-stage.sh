@@ -11,6 +11,11 @@ GRANTS_SQL="select coalesce(string_agg(user_id || '/' || client_id, ',' order by
   where revoked_at is null and client_id in (select id from auth.oauth_clients where deleted_at is null)"
 # The seed's own tenants: player tenants are provisioned at play time, and a rebuild removes them.
 SEED_INVOICES_SQL="select count(*) from public.invoices i join public.tenants t on t.id = i.tenant_id where t.kind in ('stage', 'victim')"
+# Never read the real ~/.ar-copilot/stage.env, and ignore any STAGE_* the caller's shell has exported.
+envdir="$(mktemp -d)"; trap 'rm -rf "$envdir"' EXIT
+export AR_ENV_DIR="$envdir"
+unset STAGE_REF STAGE_DB_PASSWORD STAGE_SEED_PASSWORD STAGE_CANARY_SALT DB_URL
+STAGE_POOLER="aws-0-us-west-2.pooler.supabase.com:5432/postgres"
 q() { psql "$LOCAL_URL" -X -q -At -v ON_ERROR_STOP=1 -c "$1"; }
 
 fails=0
@@ -31,6 +36,25 @@ out="$(DB_URL="postgresql://postgres.stageref@aws-0-us-west-2.pooler.supabase.co
   STAGE_DB_PASSWORD=x STAGE_SEED_PASSWORD= STAGE_CANARY_SALT=x $script --yes --no-verify 2>&1)"; rc=$?
 [ $rc -ne 0 ]; check "stage without the seed password: refuses" $?
 has "$out" "STAGE_SEED_PASSWORD"; check "stage without the seed password: names it" $?
+
+# 1b. The scripts load ~/.ar-copilot/stage.env themselves (here AR_ENV_DIR): nothing needs exporting first.
+printf 'STAGE_REF=stageref\nSTAGE_DB_PASSWORD=x\nSTAGE_SEED_PASSWORD=x\nSTAGE_CANARY_SALT=x\n' > "$envdir/stage.env"
+out="$(DB_URL="postgresql://postgres.stageref@$STAGE_POOLER" $script 2>&1)"
+has "$out" "Run again with --yes"; check "env file: loaded, every stage check passes (stops only at --yes)" $?
+out="$(DB_URL="postgresql://postgres.otherref@$STAGE_POOLER" $script 2>&1)"
+has "$out" "not the stage project"; check "env file: its STAGE_REF guards the target" $?
+out="$(STAGE_SEED_PASSWORD= DB_URL="postgresql://postgres.stageref@$STAGE_POOLER" $script 2>&1)"
+has "$out" "STAGE_SEED_PASSWORD"; check "env file: a value already in the environment wins (even empty)" $?
+rm "$envdir/stage.env"
+out="$(DB_URL="postgresql://postgres.stageref@$STAGE_POOLER" $script 2>&1)"
+has "$out" "stage.env"; check "no env file and no STAGE_REF: names the file" $?
+
+# 1c. reset-stage.sh refuses when the linked project isn't the stage project in stage.env.
+printf 'STAGE_REF=notthelinkedref\nSTAGE_DB_PASSWORD=x\n' > "$envdir/stage.env"
+out="$(scripts/reset-stage.sh 2>&1)"; rc=$?
+[ $rc -ne 0 ]; check "reset: another linked project: refuses" $?
+has "$out" "linked project is not stage"; check "reset: another linked project: says why" $?
+rm "$envdir/stage.env"
 
 # 2. What must survive the rebuild.
 users_before="$(q "select count(*) from auth.users")"
