@@ -5,6 +5,7 @@
 -- inside their own rolled-back transaction.
 
 -- Beat 1: RLS back on, in case "RLS off" (rls_off.sql) wasn't reverted.
+alter table public.payments enable row level security;
 alter table public.invoices enable row level security;
 alter table public.customers enable row level security;
 

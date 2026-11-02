@@ -1,5 +1,6 @@
 -- Beat 1's "RLS off" step (supabase/stage/rls_off.sql) and its revert: the exact files run on stage. Off, Bob's
--- "more than a year overdue" question returns every tenant's invoices, the number the reset prints; reverted, his own.
+-- payments question finds another customer's payments, and his "more than a year overdue" question returns every
+-- tenant's invoices (the number the reset prints); reverted, his own again.
 begin;
 \ir _fixtures.psql
 \ir _stage/beat1_counts.psql
@@ -18,16 +19,29 @@ begin
   reset role;
   return n;
 end $$;
+insert into public.payments (tenant_id, received_at, amount, currency, payer_name, remittance_memo, matched_invoice_id)
+values ('00000000-0000-0000-0000-0000000000b1', now(), 77.70, 'USD', 'Not Bobs Customer Co', 'Payment for BWS-2026-Z1',
+        (select id from public.invoices where invoice_number = 'BWS-2026-Z1'));
+create function pg_temp.bob_sees_payer(p text) returns boolean language plpgsql as $$
+declare r boolean;
+begin
+  perform pg_temp.act_as('b0b00000-0000-0000-0000-000000000002');
+  r := exists (select 1 from jsonb_array_elements(public.search_payments(false) -> 'data') e where e ->> 'payer_name' = p);
+  reset role;
+  return r;
+end $$;
 create function pg_temp.rls(t text) returns boolean language sql as $$ select relrowsecurity from pg_class where oid = t::regclass $$;
 
 select pg_temp.bob_overdue() as bob_own \gset
 select pg_temp.beat1_rls_off_count() as rls_off \gset
 select ok(:bob_own < :rls_off, 'before: Bob sees fewer than the RLS-off number');
+select ok(not pg_temp.bob_sees_payer('Not Bobs Customer Co'), 'before: Bob can''t see another customer''s payment');
 
 \ir _stage/rls_off.psql
 \ir _stage/rls_off.psql
-select ok(not pg_temp.rls('public.invoices') and not pg_temp.rls('public.customers'), 'rls_off.sql: RLS off on invoices and customers (twice is fine)');
-select ok(pg_temp.rls('public.payments'), 'rls_off.sql: payments untouched');
+select ok(not pg_temp.rls('public.invoices') and not pg_temp.rls('public.customers') and not pg_temp.rls('public.payments'),
+  'rls_off.sql: RLS off on payments, invoices and customers (twice is fine)');
+select ok(pg_temp.bob_sees_payer('Not Bobs Customer Co'), 'RLS off: Bob''s payments question finds another customer''s payment');
 select is(pg_temp.bob_overdue(), :rls_off::bigint, 'RLS off: Bob''s question returns the number the reset prints');
 select pg_temp.act_as('b0b00000-0000-0000-0000-000000000002');
 select ok(exists (select 1 from jsonb_array_elements(public.list_overdue_invoices(366) -> 'data') e
@@ -36,7 +50,9 @@ reset role;
 
 \ir _stage/rls_off_revert.psql
 \ir _stage/rls_off_revert.psql
-select ok(pg_temp.rls('public.invoices') and pg_temp.rls('public.customers'), 'rls_off_revert.sql: RLS back on (twice is fine)');
+select ok(pg_temp.rls('public.invoices') and pg_temp.rls('public.customers') and pg_temp.rls('public.payments'),
+  'rls_off_revert.sql: RLS back on for all three (twice is fine)');
+select ok(not pg_temp.bob_sees_payer('Not Bobs Customer Co'), 'reverted: the other customer''s payment is hidden again');
 select is(pg_temp.bob_overdue(), :bob_own::bigint, 'reverted: Bob sees his own again');
 
 select * from finish();

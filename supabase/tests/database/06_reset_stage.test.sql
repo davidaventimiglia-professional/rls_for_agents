@@ -37,8 +37,9 @@ insert into app.agent_grants (user_id, client_id, revoked_at) values
 
 -- ---- S9: reset, twice (idempotent)
 \ir _stage/reset_stage.psql
-select ok((select bool_and(relrowsecurity) from pg_class where oid in ('public.invoices'::regclass, 'public.customers'::regclass)),
-  'reset: RLS back on for invoices and customers (beat 1''s "RLS off" undone)');
+select ok((select bool_and(relrowsecurity) from pg_class
+           where oid in ('public.payments'::regclass, 'public.invoices'::regclass, 'public.customers'::regclass)),
+  'reset: RLS back on for payments, invoices and customers (beat 1''s "RLS off" undone)');
 create temp table after1 as select
   (select array_agg(invoice_number || ':' || status order by invoice_number) from public.invoices
    where tenant_id in (select id from public.tenants where kind = 'stage')) as invoices,
