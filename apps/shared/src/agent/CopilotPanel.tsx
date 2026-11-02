@@ -2,6 +2,7 @@
 // badge comes from the tool's own envelope; the panel decides nothing about what the agent may do.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Conversation } from "./conversation.ts";
+import { Markdown } from "./markdown.tsx";
 import { errorMessage, type Badge, type Item } from "./transcript.ts";
 import type { AgentClient } from "./types.ts";
 
@@ -102,7 +103,8 @@ export function CopilotPanel({ agent, getJwt, onConsent, resume, errorText, plac
         {items.length === 0 && <p className="copilot-empty">Ask the agent to work on your receivables. It can only do what you can do, and the database checks every action.</p>}
         {items.map((it, i) => {
           if (it.kind === "user") return <div key={i} className="msg msg-user">{it.text}</div>;
-          if (it.kind === "assistant") return <div key={i} className="msg msg-assistant">{it.text}</div>;
+          // Only the agent's replies get the markdown subset (#39); questions and notices stay plain text.
+          if (it.kind === "assistant") return <div key={i} className="msg msg-assistant md"><Markdown text={it.text} /></div>;
           if (it.kind === "tool") return <ToolChip key={i} item={it} />;
           return (
             <div key={i} className={`notice notice-${it.tone}`} data-code={it.code}>
