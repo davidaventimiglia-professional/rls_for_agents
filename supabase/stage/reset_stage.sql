@@ -4,6 +4,11 @@
 -- No BEGIN/COMMIT here: scripts/reset-stage.sh runs it with psql --single-transaction, and the tests include it
 -- inside their own rolled-back transaction.
 
+-- Beat 1: RLS back on, in case "RLS off" (rls_off.sql) wasn't reverted.
+alter table public.payments enable row level security;
+alter table public.invoices enable row level security;
+alter table public.customers enable row level security;
+
 -- Beat 4: revert the live $500 policy.
 drop policy if exists agent_send_under_500 on public.dunning_emails;
 

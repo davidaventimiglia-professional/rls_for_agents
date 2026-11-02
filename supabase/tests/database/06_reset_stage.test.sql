@@ -24,6 +24,8 @@ reset role;
 select ok((select count(*) from pg_policies where policyname = 'agent_send_under_500') = 1, 'rehearsal state: live policy on');
 -- a kill-switch drill left the switch on (CC-10): it would refuse every stage beat
 update ctf.arena_switch set paused = true, message = 'drill';
+-- beat 1's "RLS off" step without its revert
+\ir _stage/rls_off.psql
 
 -- Revoked grants of clients that no longer exist (never registered, or deleted) must stay revoked:
 -- re-activating them would let an unexpired token of a deleted client work again.
@@ -35,6 +37,9 @@ insert into app.agent_grants (user_id, client_id, revoked_at) values
 
 -- ---- S9: reset, twice (idempotent)
 \ir _stage/reset_stage.psql
+select ok((select bool_and(relrowsecurity) from pg_class
+           where oid in ('public.payments'::regclass, 'public.invoices'::regclass, 'public.customers'::regclass)),
+  'reset: RLS back on for payments, invoices and customers (beat 1''s "RLS off" undone)');
 create temp table after1 as select
   (select array_agg(invoice_number || ':' || status order by invoice_number) from public.invoices
    where tenant_id in (select id from public.tenants where kind = 'stage')) as invoices,
