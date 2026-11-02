@@ -54,6 +54,40 @@ describe("Markdown (the safe subset the copilot renders, #39)", () => {
 
   it("a rule", () => expect(html("Above\n\n---\n\nBelow")).toBe("<p>Above</p><hr/><p>Below</p>"));
 
+  // Short data cells (invoice numbers, dates, amounts) never wrap; longer text and headers wrap at spaces (class nw).
+  it("a table, as Claude wrote one for Bob's four invoices, with inline formatting in cells", () =>
+    expect(html([
+      "4 invoices are more than a year overdue:",
+      "",
+      "| Invoice | Customer | Amount |",
+      "|---|---|---|",
+      "| BWS-2026-2731 | **Sterling Motors Group** | USD 740.56 |",
+      "| BWS-2026-1400 | Harbor Marine LLC | USD 101.16 |",
+      "",
+      "The total is USD 841.72.",
+    ].join("\n"))).toBe(
+      "<p>4 invoices are more than a year overdue:</p>" +
+      '<table><thead><tr><th>Invoice</th><th>Customer</th><th>Amount</th></tr></thead><tbody>' +
+      '<tr><td class="nw">BWS-2026-2731</td><td><strong>Sterling Motors Group</strong></td><td class="nw">USD 740.56</td></tr>' +
+      '<tr><td class="nw">BWS-2026-1400</td><td>Harbor Marine LLC</td><td class="nw">USD 101.16</td></tr></tbody></table>' +
+      "<p>The total is USD 841.72.</p>"));
+
+  it("table columns keep their alignment, rows are padded or cut to the header, and \\| is a literal pipe", () =>
+    expect(html("Payer | Amount\n:--- | ---:\nA \\| B | 5\nC")).toBe(
+      '<table><thead><tr><th style="text-align:left">Payer</th><th style="text-align:right">Amount</th></tr></thead><tbody>' +
+      '<tr><td class="nw" style="text-align:left">A | B</td><td class="nw" style="text-align:right">5</td></tr>' +
+      '<tr><td class="nw" style="text-align:left">C</td><td class="nw" style="text-align:right"></td></tr></tbody></table>'));
+
+  it("a separator with a different number of columns isn't a table (a sentence with a pipe, then a rule)", () =>
+    expect(html("Paid | unpaid split is 3 to 1\n---")).toBe("<p>Paid | unpaid split is 3 to 1</p><hr/>"));
+
+  it("a line with pipes but no separator under it stays text", () =>
+    expect(html("a | b\nnot a separator")).toBe("<p>a | b<br/>not a separator</p>"));
+
+  it("table cells are escaped like everything else", () =>
+    expect(html("| x |\n|---|\n| <img src=x onerror=alert(1)> |")).toBe(
+      '<table><thead><tr><th>x</th></tr></thead><tbody><tr><td>&lt;img src=x onerror=alert(1)&gt;</td></tr></tbody></table>'));
+
   it("never turns the reply into markup beyond the subset: HTML is escaped, links stay text", () => {
     expect(html('Memo: <b>pay now</b> <img src=x onerror="alert(1)">'))
       .toBe("<p>Memo: &lt;b&gt;pay now&lt;/b&gt; &lt;img src=x onerror=&quot;alert(1)&quot;&gt;</p>");

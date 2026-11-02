@@ -1,6 +1,6 @@
 // The small markdown subset the copilot renders in the agent's replies (#39): paragraphs and line breaks, bold,
-// italic, inline code, bullet and numbered lists (nested by indentation), headings (as bold paragraphs), fenced code
-// and rules. Everything else stays text. Replies quote untrusted text (payment memos), so nothing here produces raw
+// italic, inline code, bullet and numbered lists (nested by indentation), headings (as bold paragraphs), fenced code,
+// rules and tables (a header row, then a |---| separator, then rows; column alignment kept). Everything else stays text. Replies quote untrusted text (payment memos), so nothing here produces raw
 // HTML: the output is React elements, and every piece of text goes through React's escaping. Links stay text.
 import type { ReactNode } from "react";
 
@@ -9,13 +9,24 @@ type Block =
   | { kind: "h"; text: string }
   | { kind: "code"; text: string }
   | { kind: "hr" }
-  | { kind: "list"; ordered: boolean; start: number; items: ListItem[] };
+  | { kind: "list"; ordered: boolean; start: number; items: ListItem[] }
+  | { kind: "table"; align: Align[]; head: string[]; rows: string[][] };
+type Align = "left" | "right" | "center" | null;
 type ListItem = { text: string; children: Block[] };
 
 const ITEM = /^(\s*)([-*+]|(\d{1,9})[.)])\s+(.*)$/;
 const HEADING = /^#{1,6}\s+(.*)$/;
 const RULE = /^\s{0,3}([-*_])(\s*\1){2,}\s*$/;
 const FENCE = /^\s*```/;
+const TABLE_SEP = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+
+// A table row's cells: split on pipes that aren't escaped, dropping the optional outer pipes; \| is a literal pipe.
+function cells(line: string): string[] {
+  const parts = line.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "").split(/(?<!\\)\|/);
+  return parts.map((c) => c.trim().replace(/\\\|/g, "|"));
+}
+const alignOf = (c: string): Align =>
+  c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : null;
 
 export function parseBlocks(text: string): Block[] {
   const blocks: Block[] = [];
@@ -38,6 +49,25 @@ export function parseBlocks(text: string): Block[] {
     }
     if (!line.trim()) { endPara(); endLists(); continue; }
     if (RULE.test(line)) { endPara(); endLists(); blocks.push({ kind: "hr" }); continue; }
+    // A table needs a separator with one cell per header cell (as GitHub's markdown does), so a sentence with a pipe
+    // followed by a --- rule stays a sentence and a rule.
+    if (line.includes("|") && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1])
+        && cells(lines[i + 1]).length === cells(line).length) {
+      endPara(); endLists();
+      const head = cells(line), width = head.length;
+      const align = cells(lines[i + 1]).slice(0, width).map(alignOf);
+      while (align.length < width) align.push(null);
+      const rows: string[][] = [];
+      // Rows run to the next blank line, each padded or cut to the header's width.
+      for (i += 2; i < lines.length && lines[i].trim(); i++) {
+        const r = cells(lines[i]).slice(0, width);
+        while (r.length < width) r.push("");
+        rows.push(r);
+      }
+      i--;
+      blocks.push({ kind: "table", align, head, rows });
+      continue;
+    }
     const h = HEADING.exec(line);
     if (h) { endPara(); endLists(); blocks.push({ kind: "h", text: h[1].trim() }); continue; }
 
@@ -98,6 +128,20 @@ function renderBlock(b: Block, key: string): ReactNode {
     case "h": return <p key={key}><strong>{inline(b.text, key)}</strong></p>;
     case "code": return <pre key={key}><code>{b.text}</code></pre>;
     case "hr": return <hr key={key} />;
+    case "table": {
+      const style = (c: number) => (b.align[c] ? { textAlign: b.align[c]! } : undefined);
+      // Short data cells (invoice numbers, dates, amounts) never wrap, so BWS-2026-2731 isn't split at its hyphens;
+      // longer text (customer names) and headers wrap at spaces, so the table fits the panel.
+      const nw = (t: string) => (t.length <= 16 || !/\s/.test(t) ? "nw" : undefined);
+      return (
+        <table key={key}>
+          <thead><tr>{b.head.map((h, c) => <th key={c} style={style(c)}>{inline(h, `${key}.h${c}`)}</th>)}</tr></thead>
+          <tbody>{b.rows.map((r, j) => (
+            <tr key={j}>{r.map((d, c) => <td key={c} className={nw(d)} style={style(c)}>{inline(d, `${key}.${j}.${c}`)}</td>)}</tr>
+          ))}</tbody>
+        </table>
+      );
+    }
     case "list": {
       const items = b.items.map((it, i) => (
         <li key={i}>{inline(it.text, `${key}.${i}`)}{it.children.map((c, j) => renderBlock(c, `${key}.${i}.${j}`))}</li>

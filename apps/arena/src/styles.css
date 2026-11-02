@@ -229,6 +229,11 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
 .md code { font-family: ui-monospace, Menlo, monospace; font-size: 0.88em; }
 .md pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 0.45rem 0.6rem; border: var(--rule); border-style: dashed; }
 .md hr { border: 0; border-top: var(--rule); }
+.md table { display: block; overflow-x: auto; border-collapse: collapse; font-variant-numeric: tabular-nums; overflow-wrap: normal; font-size: 0.92em; }
+.md th, .md td { padding: 0.2em 0.45em; border-bottom: 1px dashed currentColor; text-align: left; vertical-align: top; }
+.md th { border-bottom: var(--rule); }
+.md th:first-child, .md td:first-child { padding-left: 0; }
+.md .nw { white-space: nowrap; }
 .copilot .notice { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; padding: 0.6rem 0.75rem; border: var(--rule); border-style: dashed; }
 .copilot .notice-error { border-color: var(--stamp); color: var(--stamp); border-style: solid; }
 .copilot .notice .primary { padding: 0 1.2rem; min-height: 2.8rem; }
