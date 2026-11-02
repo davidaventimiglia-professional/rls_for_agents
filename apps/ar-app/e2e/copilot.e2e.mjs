@@ -96,6 +96,48 @@ try {
   assert.ok(ra > rb && rb > 0);
   ok("beat 1: same question, different correct answers", `Alice ${ra} rows, Bob ${rb} rows (his customers only)`);
 
+  // #38: a reply streamed in pieces (the scripted agent splits its help text mid-word, like the runtime) is one bubble.
+  {
+    const ap = alice.page;
+    const replies = () => ap.locator(".copilot-log > .msg-assistant").count();
+    const n = await replies();
+    await ap.fill(".copilot-input textarea", "hello");
+    await ap.click(".copilot-input button.primary");
+    await ap.waitForFunction((k) => document.querySelectorAll(".copilot-log > .msg-assistant").length > k
+      && !document.querySelector(".msg-thinking"), n);
+    assert.equal(await replies(), n + 1);
+    assert.equal(await ap.locator(".copilot-log > .msg-assistant").last().textContent(),
+      'Scripted dev agent. Send lines like: /call get_invoice {"invoice_number":"BWS-2026-0001"}');
+    ok("a reply streamed in 13 pieces shows as one bubble");
+  }
+
+  // #40: the conversation survives leaving projector mode, the drawer, coming back, and a reload.
+  {
+    const ap = alice.page;
+    const log = () => ap.locator(".copilot-log").evaluate((el) =>
+      [...el.children].filter((e) => e.className).map((e) => `${e.className}|${e.textContent}`).join("\n"));
+    const drawerButton = (name) => ap.locator(".topbar").getByRole("button", { name, exact: true });
+    const before = await log();
+    assert.match(before, /msg-user/);
+    await ap.click("[data-testid=stage-toggle]");
+    await ap.waitForSelector(".shell:not(.shell-stage)");
+    if (!(await ap.locator(".drawer .copilot").count())) await drawerButton("Copilot").click();
+    await ap.waitForSelector(".drawer .copilot");
+    assert.equal(await log(), before);
+    await drawerButton("Hide copilot").click();
+    await ap.waitForSelector(".drawer", { state: "detached" });
+    await drawerButton("Copilot").click();
+    await ap.waitForSelector(".drawer .copilot");
+    assert.equal(await log(), before);
+    await ap.click("[data-testid=stage-toggle]");
+    await ap.waitForSelector(".shell-stage .stage-copilot .copilot");
+    assert.equal(await log(), before);
+    await ap.reload();
+    await ap.waitForSelector(".shell-stage .stage-copilot .copilot .msg-user");
+    assert.equal(await log(), before);
+    ok("the conversation survives projector mode off and on, the drawer hidden and shown, and a reload");
+  }
+
   // Beat 2: an injected memo; a fully fooled agent does what it says, and the database holds
   const { page, say } = alice;
   assert.equal(await (await say('/call search_payments {"unmatched_only":true}')).getAttribute("data-badges"), "ok");

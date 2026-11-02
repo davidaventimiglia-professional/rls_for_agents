@@ -167,12 +167,14 @@ try {
   assert.equal(await failed.locator("text=Send again").count(), 1);
   ok("a failed turn: plain words, no raw runtime text, and Send again");
 
-  // A reload starts a new conversation and does not send the held message again.
+  // A reload keeps the conversation (#40) and does not send the held message, or anything else, again.
+  const asked = await page.locator(".msg-user").count();
   await page.reload();
   await page.waitForSelector(".copilot-input textarea");
   await page.waitForTimeout(800);
-  assert.equal(await page.locator(".msg-user").count(), 0);
-  ok("reload: nothing is re-sent");
+  assert.equal(await page.locator(".msg-user").count(), asked);
+  assert.ok(asked > 0);
+  ok("reload: the conversation is kept and nothing is re-sent", `${asked} questions still shown`);
 
   // The kill switch up front (CC-10): flipped in the database, the play screen says so and Send is off.
   sql("update ctf.arena_switch set paused = true, message = 'Back at 3:15. Nothing is lost.'");
@@ -206,9 +208,12 @@ try {
   await p2.waitForSelector(".play-msg.form-error");
   assert.match(await p2.textContent(".play-msg.form-error"), /Deny/);
   await p2.waitForTimeout(800);
-  assert.equal(await p2.locator(".msg-user").count(), 0);
+  // The conversation is kept (#40): the question shows once, nothing was sent, and Connect agent is offered again.
+  assert.equal(await p2.locator(".msg-user").count(), 1);
+  assert.equal(await p2.locator(".chip").count(), 0);
+  assert.equal(await p2.locator(".notice-consent >> text=Connect agent").count(), 1);
   assert.equal(new URL(p2.url()).pathname, "/play");
-  ok("deny: back on the play screen, told why, and the held message is dropped");
+  ok("deny: back on the play screen, told why, and the held message is not sent (Connect agent is offered again)");
 } finally {
   await browser.close();
 }

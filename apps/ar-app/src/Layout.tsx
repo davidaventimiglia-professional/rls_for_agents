@@ -2,6 +2,7 @@ import type { Session } from "@supabase/supabase-js";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useSearchParams } from "react-router";
 import { CopilotPanel } from "@ar/shared/agent/CopilotPanel.tsx";
+import { conversationFor } from "@ar/shared/agent/conversation.ts";
 import { agent, getJwt, openConsent } from "./agent.ts";
 import { myMemberships, pendingActions } from "./lib/data.ts";
 import { LiveProvider, useLive } from "@ar/shared/data/live.tsx";
@@ -57,7 +58,10 @@ export function Layout({ session }: { session: Session }) {
   const m = useAsync(() => myMemberships(session.user.id), [session.user.id]);
   const first = m.data?.[0];
   const showCopilot = stage || drawer;
-  const copilot = <CopilotPanel agent={agent} getJwt={getJwt} onConsent={openConsent} />;
+  // The conversation lives above both places the panel can be (projector mode, the drawer), so moving or hiding the
+  // panel keeps it (#40).
+  const conversation = conversationFor(`ar:${session.user.id}`);
+  const copilot = <CopilotPanel agent={agent} getJwt={getJwt} onConsent={openConsent} conversation={conversation} />;
 
   return (
     <LiveProvider sb={sb}>

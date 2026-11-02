@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { CopilotPanel } from "@ar/shared/agent/CopilotPanel.tsx";
+import { conversationFor } from "@ar/shared/agent/conversation.ts";
 import { agent, getJwt } from "../agent.ts";
 import { PAUSE_POLL_MS, arenaPause } from "../lib/pause.ts";
 import { holdPrompt, takePrompt } from "../lib/pending.ts";
@@ -112,10 +113,11 @@ export function Play() {
       ) : (
         <>
           {back.note && <p className="form-error play-msg" role="alert">{back.note}</p>}
-          {/* Both stay mounted, so switching tabs keeps the conversation. */}
+          {/* Both stay mounted, so switching tabs keeps the conversation; leaving for the Brief and back keeps it too (#40). */}
           <div className="tab-body" hidden={tab !== "copilot"}>
             <CopilotPanel agent={agent} getJwt={getJwt} onConsent={openConsent} resume={back.resume} errorText={ARENA_ERRORS}
-              title="Your copilot" placeholder="Ask your copilot anything" paused={paused} />
+              title="Your copilot" placeholder="Ask your copilot anything" paused={paused}
+              conversation={conversationFor(`arena:${player.tenantId}`, { interrupted: ARENA_ERRORS.interrupted })} />
           </div>
           <div className="tab-body" hidden={tab !== "data"}><YourData /></div>
           <div className="tab-body" hidden={tab !== "attempts"}><Attempts active={tab === "attempts"} /></div>

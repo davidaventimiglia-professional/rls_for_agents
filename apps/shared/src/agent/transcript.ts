@@ -37,7 +37,13 @@ export function errorMessage(code: string, raw: string, defaults: Record<string,
 export function reduce(t: Transcript, e: PanelEvent): Transcript {
   switch (e.type) {
     case "user": return [...t, { kind: "user", text: e.text }];
-    case "text": return [...t, { kind: "assistant", text: e.text }];
+    // The runtime streams a reply as many text events, split anywhere (even mid-word): they are one reply until
+    // something else (a tool call, a notice, the next question) comes between them.
+    case "text": {
+      const last = t.at(-1);
+      return last?.kind === "assistant" ? [...t.slice(0, -1), { kind: "assistant", text: last.text + e.text }]
+                                        : [...t, { kind: "assistant", text: e.text }];
+    }
     case "tool_call": return [...t, { kind: "tool", id: e.id, name: e.name, args: e.args, pending: true, badges: [] }];
     case "tool_result": {
       const i = t.findLastIndex((x) => x.kind === "tool" && x.id === e.id);

@@ -1,7 +1,8 @@
 // Copilot panel, shared by the AR app and the arena. It renders the agent's event stream (CC-8). Every
 // badge comes from the tool's own envelope; the panel decides nothing about what the agent may do.
-import { useEffect, useRef, useState } from "react";
-import { errorMessage, reduce, type Badge, type Item, type Transcript } from "./transcript.ts";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Conversation } from "./conversation.ts";
+import { errorMessage, type Badge, type Item } from "./transcript.ts";
 import type { AgentClient } from "./types.ts";
 
 const BADGE_TEXT: Record<Badge, string> = { ok: "OK", denied: "DENIED", proposal: "PROPOSAL CREATED", error: "ERROR" };
@@ -17,7 +18,6 @@ const ERROR_TEXT: Record<string, string> = {
   interrupted: "The agent's reply was cut off. Send the message again.",
 };
 
-const newSession = () => crypto.randomUUID();
 const argText = (a: Record<string, unknown>) =>
   Object.entries(a).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join(", ");
 
@@ -52,21 +52,24 @@ type Props = {
   title?: string;
   /** The kill switch is on (CC-10): this message is shown and Send is off. Presentation only; the proxy refuses too. */
   paused?: string | null;
+  /** The conversation to show, held by the app above wherever the panel is placed (#40). Without one, the panel keeps
+   * its own, which ends when the panel does. */
+  conversation?: Conversation;
 };
 
-export function CopilotPanel({ agent, getJwt, onConsent, resume, errorText, placeholder = "Ask about invoices, payments or customers", title = "Copilot", paused }: Props) {
-  const [items, setItems] = useState<Transcript>([]);
+/** The words a panel shows for an error code: the app's own (errorText), else the panel's defaults. */
+export const copilotText = (errorText?: Partial<Record<string, string>>) =>
+  (code: string, raw = "") => errorMessage(code, raw, ERROR_TEXT, errorText);
+
+export function CopilotPanel({ agent, getJwt, onConsent, resume, errorText, placeholder = "Ask about invoices, payments or customers", title = "Copilot", paused, conversation }: Props) {
+  const [own] = useState(() => new Conversation(null));
+  const chat = conversation ?? own;
+  const { items, busy, lastPrompt } = useSyncExternalStore(chat.subscribe, chat.get);
   const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [session, setSession] = useState(newSession);
-  const abort = useRef<AbortController | null>(null);
   const end = useRef<HTMLDivElement>(null);
-  const text_ = (code: string, raw = "") => errorMessage(code, raw, ERROR_TEXT, errorText);
-  const lastPrompt = useRef<string | undefined>(undefined);
   const resumed = useRef(false);
 
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [items]);
-  useEffect(() => () => abort.current?.abort(), []);
 
   const send = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -76,38 +79,18 @@ export function CopilotPanel({ agent, getJwt, onConsent, resume, errorText, plac
     await sendText(text);
   };
 
-  const sendText = async (text: string) => {
-    lastPrompt.current = text;
-    setItems((t) => reduce(t, { type: "user", text }));
-    const jwt = await getJwt();
-    if (!jwt) { setItems((t) => reduce(t, { type: "error", code: "unauthorized", message: text_("unauthorized") })); return; }
-    setBusy(true);
-    abort.current = new AbortController();
-    try {
-      for await (const ev of agent.send(jwt, session, text, abort.current.signal)) {
-        if (ev.type === "error") console.warn(`agent error ${ev.code}: ${ev.message}`);  // the raw detail, for developers
-        const shown = ev.type === "error" ? { ...ev, message: text_(ev.code, ev.message) } : ev;
-        setItems((t) => reduce(t, shown));
-      }
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        console.warn(`agent request failed: ${(err as Error).message}`);
-        setItems((t) => reduce(t, { type: "error", code: "internal", message: text_("internal", (err as Error).message) }));
-      }
-    }
-    setBusy(false);
-  };
+  const sendText = (text: string, resume = false) =>
+    chat.send(text, { agent, getJwt, textFor: copilotText(errorText) }, { resume });
 
-  // Deferred a tick: under StrictMode the first mount is torn down at once (aborting any request), so only the
-  // mount that stays sends.
+  // Deferred a tick: under StrictMode the first mount is torn down at once, so only the mount that stays sends.
   useEffect(() => {
     if (!resume || resumed.current) return;
-    const t = setTimeout(() => { resumed.current = true; void sendText(resume); }, 0);
+    const t = setTimeout(() => { resumed.current = true; void sendText(resume, true); }, 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resume]);
 
-  const reset = () => { abort.current?.abort(); setItems([]); setSession(newSession()); setBusy(false); };
+  const reset = () => chat.reset();
 
   return (
     <section className="copilot" aria-label={title}>
@@ -124,9 +107,9 @@ export function CopilotPanel({ agent, getJwt, onConsent, resume, errorText, plac
           return (
             <div key={i} className={`notice notice-${it.tone}`} data-code={it.code}>
               {it.text}
-              {it.url && <button type="button" className="primary" onClick={() => onConsent(it.url!, lastPrompt.current)}>Connect agent</button>}
-              {it.retry && i === items.length - 1 && lastPrompt.current && (
-                <button type="button" className="primary" disabled={busy || !!paused} onClick={() => sendText(lastPrompt.current!)}>Send again</button>
+              {it.url && <button type="button" className="primary" onClick={() => onConsent(it.url!, lastPrompt)}>Connect agent</button>}
+              {it.retry && i === items.length - 1 && lastPrompt && (
+                <button type="button" className="primary" disabled={busy || !!paused} onClick={() => sendText(lastPrompt)}>Send again</button>
               )}
             </div>
           );
