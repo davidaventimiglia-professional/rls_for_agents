@@ -116,6 +116,27 @@ try {
   assert.equal(bobUnmatched, 0);
   ok("bob: sees only his customers' invoices and no unmatched payments", `${bobOverdue} overdue, ${bobUnmatched} unmatched`);
 
+  // Dark mode: Bob's window goes dark from the top bar, stays dark across a reload and projector mode; Alice's stays light
+  const bg = (p) => p.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const isDark = (p) => p.evaluate(() => document.documentElement.classList.contains("dark"));
+  const lightBg = await bg(b);
+  assert.equal(await b.textContent("[data-testid=theme-toggle]"), "Dark mode");
+  await b.click("[data-testid=theme-toggle]");
+  assert.equal(await isDark(b), true);
+  assert.notEqual(await bg(b), lightBg);
+  await b.reload();
+  await b.waitForSelector("[data-testid=theme-toggle][aria-pressed=true]");
+  await b.click("[data-testid=stage-toggle]");
+  await b.waitForSelector(".shell-stage");
+  assert.equal(await isDark(b), true);
+  if (SHOTS) await b.screenshot({ path: `${SHOTS}/P_dark_stage_bob_local.png` });
+  await b.click("[data-testid=stage-toggle]");
+  assert.equal(await isDark(a), false);
+  assert.equal(await bg(a), lightBg);
+  await b.click("[data-testid=theme-toggle]");
+  assert.equal(await isDark(b), false);
+  ok("bob: dark mode toggles from the top bar, survives a reload and projector mode; alice stays light");
+
   // ---- P3: agent proposals reach Alice's inbox live
   await a.click("nav >> text=Approvals");
   await a.waitForSelector(".live-on");

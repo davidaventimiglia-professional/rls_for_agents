@@ -7,6 +7,7 @@ import { agent, getJwt, openConsent } from "./agent.ts";
 import { myMemberships, pendingActions } from "./lib/data.ts";
 import { LiveProvider, useLive } from "@ar/shared/data/live.tsx";
 import { isStageShortcut, readStage, stageFromQuery, writeStage } from "./lib/stage.ts";
+import { readTheme, type Theme, writeTheme } from "./lib/theme.ts";
 import { useAsync } from "./lib/ui.tsx";
 import { sb } from "./supabase.ts";
 
@@ -34,6 +35,23 @@ function useStageMode() {
   return [stage, () => setStage((s) => !s)] as const;
 }
 
+// Dark mode, per user (lib/theme.ts): a visible difference between Alice's window and Bob's during the demo.
+// Signing out takes the class off, so the sign-in page is always light.
+function useTheme(userId: string) {
+  const [chosen, setChosen] = useState<{ userId: string; theme: Theme } | null>(null);
+  const theme = chosen?.userId === userId ? chosen.theme : readTheme(localStorage, userId);
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    return () => document.documentElement.classList.remove("dark");
+  }, [theme]);
+  const toggle = () => {
+    const next: Theme = theme === "dark" ? "light" : "dark";
+    writeTheme(localStorage, userId, next);
+    setChosen({ userId, theme: next });
+  };
+  return [theme, toggle] as const;
+}
+
 function Nav() {
   const { version } = useLive();
   const pending = useAsync(() => pendingActions("pending"), [version]);
@@ -53,6 +71,7 @@ function Nav() {
 
 export function Layout({ session }: { session: Session }) {
   const [stage, toggleStage] = useStageMode();
+  const [theme, toggleTheme] = useTheme(session.user.id);
   const [drawer, setDrawer] = useState(() => localStorage.getItem("copilot") === "open");
   useEffect(() => { localStorage.setItem("copilot", drawer ? "open" : "closed"); }, [drawer]);
   const m = useAsync(() => myMemberships(session.user.id), [session.user.id]);
@@ -71,6 +90,8 @@ export function Layout({ session }: { session: Session }) {
           <span className="who">
             <button className="link" data-testid="stage-toggle" aria-pressed={stage} title="Projector mode (Alt+Shift+P)"
               onClick={toggleStage}>{stage ? "Exit projector mode" : "Projector mode"}</button>
+            <button className="link" data-testid="theme-toggle" aria-pressed={theme === "dark"}
+              onClick={toggleTheme}>{theme === "dark" ? "Light mode" : "Dark mode"}</button>
             {!stage && <button className="link" onClick={() => setDrawer((d) => !d)}>{drawer ? "Hide copilot" : "Copilot"}</button>}
             {session.user.email}
             {first && <span className="role">{first.role}</span>}

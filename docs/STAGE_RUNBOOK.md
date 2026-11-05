@@ -23,7 +23,9 @@ themselves, so there's nothing to export first, and they refuse unless the repo'
    **Connect agent**, and approve the consent screen. After a rehearsal the page may already show the grant
    as active; reconnect anyway, because the OAuth consent behind it is gone and the agent's next token
    refresh would fail mid-demo. If the agent still holds a working token, Connect says so; if the database
-   grant is missing, Connect goes back through the consent screen on its own.
+   grant is missing, Connect goes back through the consent screen on its own. To tell the two windows apart on
+   the projector, click **Dark mode** in Bob's top bar. It's kept per user in that browser, so Bob's window stays
+   dark across reloads and projector mode while Alice's stays light.
 3. **Warm the runtime.** Ask one harmless question in the copilot (for example, the overdue invoices over
    a year old). The first runtime call includes a cold start of about 3 s (spike).
 4. **Check the inbox is live.** Approvals shows a green "live" tag next to the subtitle.
